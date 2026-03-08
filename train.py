@@ -178,10 +178,10 @@ class GPT(nn.Module):
         head_dim = self.config.n_embd // self.config.n_head
         cos, sin = self._precompute_rotary_embeddings(self.rotary_seq_len, head_dim)
         self.cos, self.sin = cos, sin
-        # Cast embeddings to fp16
-        self.transformer.wte.to(dtype=torch.float16)
+        # Cast embeddings to bf16
+        self.transformer.wte.to(dtype=torch.bfloat16)
         for ve in self.value_embeds.values():
-            ve.to(dtype=torch.float16)
+            ve.to(dtype=torch.bfloat16)
 
     def _precompute_rotary_embeddings(self, seq_len, head_dim, base=10000, device=None):
         if device is None:
@@ -191,7 +191,7 @@ class GPT(nn.Module):
         t = torch.arange(seq_len, dtype=torch.float32, device=device)
         freqs = torch.outer(t, inv_freq)
         cos, sin = freqs.cos(), freqs.sin()
-        cos, sin = cos.half(), sin.half()
+        cos, sin = cos.bfloat16(), sin.bfloat16()
         cos, sin = cos[None, :, None, :], sin[None, :, None, :]
         return cos, sin
 
@@ -321,7 +321,7 @@ def muon_step(stacked_grads, stacked_params, momentum_buffer, second_momentum_bu
     momentum_buffer.lerp_(stacked_grads, 1 - momentum)
     g = stacked_grads.lerp_(momentum_buffer, momentum)
     # Polar express orthogonalization
-    X = g.half()
+    X = g.bfloat16()
     X = X / (X.norm(dim=(-2, -1), keepdim=True) * 1.02 + 1e-6)
     if g.size(-2) > g.size(-1):
         for a, b, c in polar_express_coeffs[:ns_steps]:
@@ -437,7 +437,7 @@ torch.manual_seed(42)
 torch.mps.manual_seed(42)
 torch.set_float32_matmul_precision("high")
 device = torch.device("mps")
-autocast_ctx = torch.amp.autocast(device_type="mps", dtype=torch.float16)
+autocast_ctx = torch.amp.autocast(device_type="mps", dtype=torch.bfloat16)
 # Apple M-series approximate peak FLOPS (adjust for your chip)
 # M1 Pro ~5.2 TFLOPS, M2 Max ~13.6 TFLOPS, M3 Max ~14.2 TFLOPS, M4 Max ~17.4 TFLOPS
 DEVICE_FP16_PEAK_FLOPS = 14.2e12  # M3 Max estimate, adjust as needed
