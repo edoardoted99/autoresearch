@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+#
+# ollama-remote — run ollama models on a remote server with API key auth
+#
+# Usage:
+#   ollama-remote run qwen3-coder-next:latest
+#   ollama-remote run gemma3:27b --host https://llamapass.org --key oah_xxx
+#   ollama-remote list
+#
+# Reads defaults from .env (OLLAMA_HOST, API_KEY) if present.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROXY_PORT=11435
+PROXY_PID=""
+
+# Load .env defaults (only KEY=VALUE lines)
+if [[ -f "$SCRIPT_DIR/.env" ]]; then
+    while IFS='=' read -r key value || [[ -n "$key" ]]; do
+        [[ -z "$key" || "$key" =~ ^# ]] && continue
+        [[ "$key" =~ ^[A-Za-z_][A-Za-z_0-9]*$ ]] && export "$key=$value"
+    done < "$SCRIPT_DIR/.env"
+fi
+
+# Parse --host and --key from args, pass the rest to ollama
+OLLAMA_ARGS=()
+HOST="${OLLAMA_HOST:-}"
+KEY="${API_KEY:-}"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --host)  HOST="$2"; shift 2 ;;
+        --key)   KEY="$2"; shift 2 ;;
+        *)       OLLAMA_ARGS+=("$1"); shift ;;
+    esac
+done
+
+if [[ -z "$HOST" ]]; then
+    echo "Error: no host. Set OLLAMA_HOST in .env or use --host URL" >&2
+    exit 1
+fi
+if [[ -z "$KEY" ]]; then
+    echo "Error: no API key. Set API_KEY in .env or use --key KEY" >&2
+    exit 1
+fi
+
+# Ensure host has /ollama path
+REMOTE_URL="${HOST%/}"
+[[ "$REMOTE_URL" != */ollama ]] && REMOTE_URL="$REMOTE_URL/ollama"
+
+cleanup() {
+    if [[ -n "$PROXY_PID" ]]; then
+        kill "$PROXY_PID" 2>/dev/null
+        wait "$PROXY_PID" 2>/dev/null
+    fi
+}
+trap cleanup EXIT
+
+# Start inline auth proxy
+python3 -c "
+import sys, urllib.request, ssl
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+URL = '${REMOTE_URL}'
+KEY = '${KEY}'
+
+class H(BaseHTTPRequestHandler):
+    def _proxy(self, method):
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length) if length else None
+        req = urllib.request.Request(f'{URL}{self.path}', data=body, method=method)
+        req.add_header('Authorization', f'Api-Key {KEY}')
+        if body:
+            req.add_header('Content-Type', 'application/json')
+        ctx = ssl.create_default_context()
+        try:
+            with urllib.request.urlopen(req, context=ctx) as r:
+                data = r.read()
+                self.send_response(r.status)
+                for k, v in r.getheaders():
+                    if k.lower() not in ('transfer-encoding', 'connection'):
+                        self.send_header(k, v)
+                self.end_headers()
+                self.wfile.write(data)
+        except urllib.error.HTTPError as e:
+            self.send_response(e.code)
+            self.end_headers()
+            self.wfile.write(e.read())
+    def do_GET(self): self._proxy('GET')
+    def do_POST(self): self._proxy('POST')
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()
+    def log_message(self, *a): pass
+
+HTTPServer(('127.0.0.1', ${PROXY_PORT}), H).serve_forever()
+" &
+PROXY_PID=$!
+
+# Wait for proxy to be ready
+for i in $(seq 1 20); do
+    curl -s -o /dev/null http://localhost:${PROXY_PORT}/ 2>/dev/null && break
+    sleep 0.1
+done
+
+# Run ollama against local proxy
+OLLAMA_HOST="http://localhost:${PROXY_PORT}" ollama "${OLLAMA_ARGS[@]}" || true
