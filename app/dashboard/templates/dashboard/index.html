@@ -1,0 +1,52 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Programs — autoresearch{% endblock %}
+{% block nav_programs %}class="active"{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <h1 style="border:0; margin:0; padding:0;">Programs</h1>
+    <a href="{% url 'dashboard:program_create' %}" class="btn btn-primary">+ New Program</a>
+</div>
+
+{% if programs %}
+<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(350px, 1fr)); gap:12px;">
+    {% for p in programs %}
+    <a href="{% url 'dashboard:program_detail' p.name %}" class="card" style="text-decoration:none; display:block;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span style="color:#f0f6fc; font-weight:700; font-size:1.1em;">{{ p.name }}</span>
+            <span class="badge badge-{{ p.status|default:'idle' }}" id="prog-status-{{ p.name }}">idle</span>
+        </div>
+        <p style="color:#8b949e; font-size:0.85em; margin-bottom:12px;">{{ p.description|truncatechars:80 }}</p>
+        <div style="display:flex; gap:16px; font-size:0.8em; color:#6e7681;">
+            <span>metric: <code style="color:#58a6ff;">{{ p.metric }}</code> ({{ p.metric_direction }})</span>
+            <span>budget: <code style="color:#c9d1d9;">{{ p.time_budget }}s</code></span>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+
+<script>
+// Mark running programs
+async function markRunning() {
+    try {
+        const r = await fetch('{% url "dashboard:experiment_status_api" %}');
+        const d = await r.json();
+        (d.experiments || []).forEach(e => {
+            const badge = document.getElementById('prog-status-' + e.program);
+            if (badge) {
+                badge.className = 'badge badge-running';
+                badge.textContent = 'running ' + Math.round(e.progress) + '%';
+            }
+        });
+    } catch(e) {}
+}
+markRunning();
+setInterval(markRunning, 2000);
+</script>
+{% else %}
+<div class="empty">
+    <p>No programs yet.</p>
+    <p style="margin-top:8px"><a href="{% url 'dashboard:program_create' %}" class="btn btn-primary">Create your first program</a></p>
+</div>
+{% endif %}
+{% endblock %}

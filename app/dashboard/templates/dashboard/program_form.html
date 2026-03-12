@@ -1,0 +1,28 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ title }} — autoresearch{% endblock %}
+{% block nav_programs %}class="active"{% endblock %}
+
+{% block breadcrumb_bar %}
+<div class="breadcrumb">
+    <a href="{% url 'dashboard:index' %}">Programs</a>
+    <span class="sep">/</span> {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+
+<form method="post" class="card">
+    {% csrf_token %}
+    {% for field in form %}
+    <div class="form-group">
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
+        {% for error in field.errors %}<div style="color:#da3633; font-size:0.85em;">{{ error }}</div>{% endfor %}
+    </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="{% url 'dashboard:index' %}" class="btn">Cancel</a>
+</form>
+{% endblock %}

@@ -1,0 +1,141 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ branch_tag }} — {{ program.name }}{% endblock %}
+{% block nav_programs %}class="active"{% endblock %}
+
+{% block breadcrumb_bar %}
+<div class="breadcrumb">
+    <a href="{% url 'dashboard:index' %}">Programs</a>
+    <span class="sep">/</span> <a href="{% url 'dashboard:program_detail' program.name %}">{{ program.name }}</a>
+    <span class="sep">/</span> <strong>{{ branch_tag }}</strong>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+{% endblock %}
+
+{% block content %}
+<h1 style="border:0; margin-bottom:8px;">{{ branch_tag }}</h1>
+
+<!-- Stats -->
+{% if experiments %}
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="stat-label">Experiments</div>
+        <div class="stat-value">{{ experiments|length }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Best {{ program.metric }}</div>
+        <div class="stat-value good">{% if best_metric %}{{ best_metric|floatformat:6 }}{% else %}-{% endif %}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Keeps</div>
+        <div class="stat-value">{{ keep_count }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Discards</div>
+        <div class="stat-value">{{ discard_count }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Crashes</div>
+        <div class="stat-value">{{ crash_count }}</div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Chart -->
+{% if has_chart %}
+<div class="card">
+    <h3 style="margin-bottom:8px;">{{ program.metric }} Progress</h3>
+    <div class="chart-container">
+        <canvas id="metricChart"></canvas>
+    </div>
+</div>
+{% endif %}
+
+<!-- Experiments -->
+<h2>Experiments</h2>
+{% if experiments %}
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Commit</th>
+            <th>{{ program.metric }}</th>
+            <th>Memory</th>
+            <th>Status</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for e in experiments %}
+        <tr{% if e.is_best %} style="background:#23863618;"{% endif %}>
+            <td>{{ forloop.counter }}</td>
+            <td><a href="{% url 'dashboard:commit_detail' program.name e.commit %}">{{ e.commit }}</a></td>
+            <td class="metric {% if e.is_best %}metric-good{% endif %}">{{ e.val_metric|floatformat:6 }}</td>
+            <td>{{ e.memory_gb|floatformat:1 }}G</td>
+            <td><span class="badge badge-{{ e.status }}">{{ e.status }}</span></td>
+            <td>{{ e.description }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty">No experiments recorded yet.</div>
+{% endif %}
+
+<!-- Commits (collapsed) -->
+<details>
+    <summary>Git commits ({{ commits|length }})</summary>
+    {% if commits %}
+    <table>
+        <thead><tr><th>Hash</th><th>Message</th><th>Date</th></tr></thead>
+        <tbody>
+        {% for c in commits %}
+            <tr>
+                <td><a href="{% url 'dashboard:commit_detail' program.name c.hash %}">{{ c.hash }}</a></td>
+                <td>{{ c.message|truncatechars:80 }}</td>
+                <td>{{ c.date }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No commits found.</div>
+    {% endif %}
+</details>
+
+{% if has_chart %}
+<script>
+const data = {{ chart_data|safe }};
+const metricName = '{{ program.metric }}';
+new Chart(document.getElementById('metricChart'), {
+    type: 'line',
+    data: {
+        labels: data.map(d => d.x),
+        datasets: [{
+            label: metricName,
+            data: data.map(d => d.val),
+            borderColor: '#58a6ff',
+            backgroundColor: 'rgba(88,166,255,0.1)',
+            fill: true, tension: 0.3, pointRadius: 5,
+            pointBackgroundColor: data.map(d => d.is_best ? '#3fb950' : '#58a6ff'),
+            pointBorderColor: data.map(d => d.is_best ? '#3fb950' : '#58a6ff'),
+            pointRadius: data.map(d => d.is_best ? 8 : 4),
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+            x: { title: { display: true, text: 'Experiment #', color: '#8b949e' }, ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+            y: { title: { display: true, text: metricName, color: '#8b949e' }, ticks: { color: '#8b949e' }, grid: { color: '#21262d' } }
+        },
+        plugins: {
+            tooltip: { callbacks: { afterLabel: ctx => data[ctx.dataIndex].label } },
+            legend: { display: false }
+        }
+    }
+});
+</script>
+{% endif %}
+{% endblock %}

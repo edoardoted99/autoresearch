@@ -1,0 +1,59 @@
+{% extends "dashboard/base.html" %}
+{% block title %}GPU — autoresearch{% endblock %}
+{% block nav_gpu %}class="active"{% endblock %}
+
+{% block content %}
+<h1>GPU Status</h1>
+
+<div id="gpuContainer"><div class="empty">Loading...</div></div>
+
+<h2>Processes</h2>
+<div id="processContainer"><div class="empty">Loading...</div></div>
+
+<script>
+function barColor(pct) {
+    if (pct > 90) return '#da3633';
+    if (pct > 70) return '#d29922';
+    return '#3fb950';
+}
+function renderGpus(data) {
+    const c = document.getElementById('gpuContainer');
+    if (data.error) { c.innerHTML = `<div class="empty">${data.error}</div>`; return; }
+    const gpus = data.gpus || [];
+    if (!gpus.length) { c.innerHTML = '<div class="empty">No GPUs detected</div>'; return; }
+    c.innerHTML = '<div class="gpu-grid">' + gpus.map(g => `
+        <div class="card">
+            <h3>GPU ${g.index}: ${g.name}</h3>
+            <div style="margin:8px 0">
+                <div style="display:flex;justify-content:space-between;font-size:0.85em"><span>GPU Util</span><span class="metric">${g.gpu_util.toFixed(0)}%</span></div>
+                <div class="gpu-bar"><div class="gpu-bar-fill" style="width:${g.gpu_util}%;background:${barColor(g.gpu_util)}"></div></div>
+            </div>
+            <div style="margin:8px 0">
+                <div style="display:flex;justify-content:space-between;font-size:0.85em"><span>Memory</span><span class="metric">${(g.mem_used/1024).toFixed(1)} / ${(g.mem_total/1024).toFixed(1)} GB</span></div>
+                <div class="gpu-bar"><div class="gpu-bar-fill" style="width:${g.mem_util}%;background:${barColor(g.mem_util)}"></div></div>
+            </div>
+            <div style="display:flex;gap:16px;font-size:0.85em;color:#8b949e;margin-top:8px">
+                <span>Temp: <span class="metric" style="color:#c9d1d9">${g.temperature.toFixed(0)}C</span></span>
+                <span>Power: <span class="metric" style="color:#c9d1d9">${g.power_draw.toFixed(0)} / ${g.power_limit.toFixed(0)} W</span></span>
+            </div>
+        </div>
+    `).join('') + '</div>';
+}
+function renderProcesses(data) {
+    const c = document.getElementById('processContainer');
+    const procs = data.processes || [];
+    if (!procs.length) { c.innerHTML = '<div class="empty">No GPU processes running</div>'; return; }
+    c.innerHTML = `<table><thead><tr><th>PID</th><th>Process</th><th>Memory (MB)</th></tr></thead>
+        <tbody>${procs.map(p => `<tr><td>${p.pid}</td><td>${p.name}</td><td class="metric">${p.mem_used}</td></tr>`).join('')}</tbody></table>`;
+}
+async function fetchGpu() {
+    try {
+        const r = await fetch('{% url "dashboard:gpu_stats_api" %}');
+        const d = await r.json();
+        renderGpus(d); renderProcesses(d);
+    } catch(e) { document.getElementById('gpuContainer').innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+}
+fetchGpu();
+setInterval(fetchGpu, 2000);
+</script>
+{% endblock %}

@@ -1,0 +1,24 @@
+[project]
+name = "mnist"
+description = "MNIST classification with autonomous research"
+
+[task]
+time_budget = 60
+metric = "val_loss"
+metric_direction = "min"   # "min" = lower is better, "max" = higher is better
+prepare_cmd = "uv run python prepare.py"
+train_cmd = "uv run python train.py"
+log_file = "run.log"
+
+[files]
+editable = ["train.py"]
+readonly = ["prepare.py"]
+agent_instructions = "program.md"
+
+[git]
+branch_prefix = "autoresearch"
+
+[results]
+file = "results.tsv"
+columns = ["commit", "val_loss", "memory_gb", "status", "description"]
+metric_column = "val_loss"

@@ -1,0 +1,124 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ program.name }} — autoresearch{% endblock %}
+{% block nav_programs %}class="active"{% endblock %}
+
+{% block breadcrumb_bar %}
+<div class="breadcrumb">
+    <a href="{% url 'dashboard:index' %}">Programs</a>
+    <span class="sep">/</span> <strong>{{ program.name }}</strong>
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <div>
+        <h1 style="border:0; margin:0; padding:0;">{{ program.name }}</h1>
+        <p style="color:#8b949e; margin-top:4px;">{{ program.description }}</p>
+    </div>
+    <div style="display:flex; gap:8px;">
+        <a href="{% url 'dashboard:program_md_edit' program.name %}" class="btn btn-sm">program.md</a>
+        <a href="{% url 'dashboard:program_edit' program.name %}" class="btn btn-sm">Settings</a>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="stat-label">Metric</div>
+        <div class="stat-value">{{ program.metric }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Direction</div>
+        <div class="stat-value">{{ program.metric_direction }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Time budget</div>
+        <div class="stat-value">{{ program.time_budget }}s</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Branches</div>
+        <div class="stat-value">{{ branches|length }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Status</div>
+        <div class="stat-value" id="programStatusValue">idle</div>
+    </div>
+</div>
+
+<!-- Branches -->
+<h2>Branches</h2>
+{% if branches %}
+<table>
+    <thead>
+        <tr>
+            <th>Branch</th>
+            <th>Experiments</th>
+            <th>Best {{ program.metric }}</th>
+            <th>Last Commit</th>
+            <th>Date</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for b in branches %}
+        <tr>
+            <td><a href="{% url 'dashboard:branch_detail' program.name b.tag %}">{{ b.tag }}</a></td>
+            <td>{{ b.num_experiments }}</td>
+            <td class="metric {% if b.best_metric %}metric-good{% endif %}">
+                {% if b.best_metric %}{{ b.best_metric|floatformat:6 }}{% else %}-{% endif %}
+            </td>
+            <td>{{ b.last_commit_message|truncatechars:60 }}</td>
+            <td>{{ b.last_commit_date }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty">
+    <p>No <code>{{ program.branch_prefix }}/*</code> branches yet.</p>
+</div>
+{% endif %}
+
+<!-- Config (collapsed) -->
+<details>
+    <summary>Configuration</summary>
+    <div class="card">
+        <dl class="config-grid">
+            <dt>Train cmd</dt><dd>{{ program.train_cmd }}</dd>
+            <dt>Prepare cmd</dt><dd>{{ program.prepare_cmd }}</dd>
+            <dt>Editable</dt><dd>{{ program.editable_files|join:", " }}</dd>
+            <dt>Readonly</dt><dd>{{ program.readonly_files|join:", " }}</dd>
+            <dt>Branch prefix</dt><dd>{{ program.branch_prefix }}/</dd>
+        </dl>
+    </div>
+</details>
+
+{% if program_md_html %}
+<details>
+    <summary>Agent Instructions (program.md)</summary>
+    <div class="card markdown-body">
+        {{ program_md_html }}
+    </div>
+</details>
+{% endif %}
+
+<script>
+async function updateStatus() {
+    try {
+        const r = await fetch('{% url "dashboard:experiment_status_api" %}');
+        const d = await r.json();
+        const el = document.getElementById('programStatusValue');
+        const exp = (d.experiments || []).find(e => e.program === '{{ program.name }}');
+        if (exp) {
+            const rem = Math.max(0, exp.time_budget - exp.elapsed);
+            el.className = 'stat-value running';
+            el.textContent = 'running ' + Math.round(rem) + 's';
+        } else {
+            el.className = 'stat-value';
+            el.textContent = 'idle';
+        }
+    } catch(e) {}
+}
+updateStatus();
+setInterval(updateStatus, 2000);
+</script>
+{% endblock %}

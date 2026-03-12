@@ -1,0 +1,24 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Edit program.md — {{ program.name }}{% endblock %}
+{% block nav_programs %}class="active"{% endblock %}
+
+{% block breadcrumb_bar %}
+<div class="breadcrumb">
+    <a href="{% url 'dashboard:index' %}">Programs</a>
+    <span class="sep">/</span> <a href="{% url 'dashboard:program_detail' program.name %}">{{ program.name }}</a>
+    <span class="sep">/</span> program.md
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>Edit program.md</h1>
+
+<form method="post">
+    {% csrf_token %}
+    <div class="form-group">
+        <textarea name="content" id="mdEditor">{{ content }}</textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="{% url 'dashboard:program_detail' program.name %}" class="btn">Cancel</a>
+</form>
+{% endblock %}

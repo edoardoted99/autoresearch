@@ -1,0 +1,29 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ commit.hash }} — {{ program.name }}{% endblock %}
+{% block nav_programs %}class="active"{% endblock %}
+
+{% block breadcrumb_bar %}
+<div class="breadcrumb">
+    <a href="{% url 'dashboard:index' %}">Programs</a>
+    <span class="sep">/</span> <a href="{% url 'dashboard:program_detail' program.name %}">{{ program.name }}</a>
+    <span class="sep">/</span> <strong>{{ commit.hash }}</strong>
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>Commit {{ commit.hash }}</h1>
+
+<div class="card">
+    <p><strong>Message:</strong> {{ commit.message }}</p>
+    <p><strong>Author:</strong> {{ commit.author }}</p>
+    <p><strong>Date:</strong> {{ commit.date }}</p>
+</div>
+
+{% for d in commit.diffs %}
+<h3>{{ d.file }} {% if d.is_editable %}<span class="tag">editable</span>{% endif %}</h3>
+<div class="diff">{% for line in d.patch.splitlines %}<span class="{% if line|first == '+' %}diff-add{% elif line|first == '-' %}diff-del{% elif line|first == '@' %}diff-hunk{% endif %}">{{ line }}</span>
+{% endfor %}</div>
+{% empty %}
+<div class="empty">No file changes in this commit.</div>
+{% endfor %}
+{% endblock %}
